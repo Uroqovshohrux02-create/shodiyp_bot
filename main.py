@@ -1,31 +1,43 @@
-import asyncio
-from aiogram import Bot, Dispatcher, types, F
+import logging
+from aiogram import Bot, Dispatcher, types
+from aiogram.utils import executor
 from cryptography.fernet import Fernet
 
-# Sizning bot tokeningiz
-API_TOKEN = "8778035897:AAGBeXmpBJt_FWO4erVsP47XxRSSLK1nm_s"
+# Bot tokeningizni o'zgartirmang
+API_TOKEN = '8778035897:AAGBeXmpBJt_FW04erV_...' 
+
+logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
-dp = Dispatcher()
+dp = Dispatcher(bot)
 
-def encrypt_msg(message: str):
-    key = Fernet.generate_key()
-    f = Fernet(key)
-    return f.encrypt(message.encode()).decode(), key.decode()
+@dp.message_handler(commands=['start'])
+async def send_welcome(message: types.Message):
+    await message.reply("🔒 Salom! Matn yuborsangiz - shifrlayman.\n"
+                        "🔓 Ochish uchun: 'Shifr | Kalit' shaklida yuboring.")
 
-@dp.message(F.text == "/start")
-async def start(message: types.Message):
-    await message.answer("🔐 Salom! Matn yuboring, uni shifrlab beraman.")
+@dp.message_handler()
+async def process_message(message: types.Message):
+    text = message.text
+    # Agar foydalanuvchi tayoqcha bilan yuborsa, ochishga harakat qiladi
+    if " | " in text:
+        try:
+            cipher_text, key = text.split(" | ")
+            cipher_suite = Fernet(key.strip().encode())
+            decoded_text = cipher_suite.decrypt(cipher_text.strip().encode()).decode()
+            await message.answer(f"🔓 Asl matn:\n\n{decoded_text}")
+        except Exception:
+            await message.answer("❌ Xato! Shifr yoki Kalit noto'g'ri.")
+    else:
+        # Oddiy matnni shifrlash
+        key = Fernet.generate_key()
+        cipher_suite = Fernet(key)
+        cipher_text = cipher_suite.encrypt(text.encode())
+        shifr = cipher_text.decode()
+        kalit = key.decode()
+        await message.answer(f"🔒 Shifr:\n`{shifr}`\n\n🔑 Kalit:\n`{kalit}`\n\n"
+                             f"Ochish uchun shunday yuboring:\n`{shifr} | {kalit}`", 
+                             parse_mode="Markdown")
 
-@dp.message(F.text)
-async def handle_msg(message: types.Message):
-    try:
-        s, k = encrypt_msg(message.text)
-        await message.answer(f"🔒 Shifr:\n`{s}`\n\n🔑 Kalit: `{k}`", parse_mode="Markdown")
-    except:
-        await message.answer("Xatolik yuz berdi.")
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)
 
-async def main():
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
